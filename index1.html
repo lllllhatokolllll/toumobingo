@@ -1,0 +1,317 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>とうものビンゴ</title>
+    <style>
+        :root {
+            --bg-color: #2c6ac4; /* 背景の青色に合わせる */
+            --accent-color: #ffa502;
+            --primary-color: #ff4757;
+        }
+        body {
+            font-family: 'Helvetica Neue', Arial, 'Hiragino Kaku Gothic ProN', Meiryo, sans-serif;
+            text-align: center;
+            background-color: var(--bg-color);
+            margin: 0;
+            padding: 10px;
+            user-select: none;
+            -webkit-user-select: none;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            min-height: 100vh;
+            box-sizing: border-box;
+        }
+
+        /* 案内テキスト */
+        .instruction {
+            width: 100%;
+            max-width: 450px;
+            font-size: 12px;
+            font-weight: bold;
+            background-color: rgba(7, 17, 38, 0.85);
+            padding: 8px 12px;
+            border-radius: 15px;
+            border: 1px solid rgba(255,165,2,0.4);
+            line-height: 1.4;
+            margin-bottom: 10px;
+            box-sizing: border-box;
+            color: #fff;
+            z-index: 10;
+        }
+
+        /* ビンゴ全体を包むコンテナ */
+        .bingo-container {
+            position: relative;
+            width: 100%;
+            max-width: 450px;
+            margin: 0 auto;
+            box-sizing: border-box;
+        }
+
+        /* 背景画像（ haikei.png ） */
+        .bg-image {
+            width: 100%;
+            height: auto;
+            display: block;
+            border-radius: 15px;
+        }
+
+        /* 画像の3×3マスの位置に正確に重ねる透明なボード */
+        .bingo-board {
+            position: absolute;
+            top: 25.4%;    /* 画像内のマス目エリアの上端位置 */
+            left: 29.2%;   /* 画像内のマス目エリアの左端位置 */
+            width: 41.6%;  /* 画像内のマス目エリア全体の横幅 */
+            height: 70.8%; /* 画像内のマス目エリア全体の縦の長さ */
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            grid-template-rows: repeat(3, 1fr);
+            gap: 4.5% 3.5%; /* 画像のマス同士の隙間に最適化 */
+            box-sizing: border-box;
+            z-index: 5;
+        }
+
+        /* タッチを検出するマス（動画が入る枠） */
+        .cell {
+            background-color: rgba(255, 255, 255, 0); /* 普段は透明で画像を見せる */
+            border-radius: 8px; /* 画像の白いマスの丸みに合わせる */
+            cursor: pointer;
+            position: relative;
+            overflow: hidden; /* 動画が枠からはみ出さないようにマスク */
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            box-sizing: border-box;
+        }
+
+        /* 🎬 枠内に表示される「うちわ」動画（最初は非表示） */
+        .stamp-video {
+            display: none;
+            position: absolute;
+            width: 100%;
+            height: 100%;
+            top: 0;
+            left: 0;
+            object-fit: cover; /* 枠の中にぴったり収める */
+            z-index: 6;
+            pointer-events: none; /* 動画自体がクリックを邪魔しないようにする */
+        }
+        
+        /* タップして選ばれたら動画を表示する */
+        .cell.selected .stamp-video {
+            display: block;
+        }
+
+        /* 🎉 ビンゴ達成時のポップアップ演出 */
+        .clear-popup {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(7, 17, 38, 0.95);
+            z-index: 9999;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+        }
+        .clear-message {
+            font-size: 28px;
+            font-weight: bold;
+            color: var(--accent-color);
+            text-shadow: 0 0 15px rgba(255,165,2,0.8);
+            margin-bottom: 20px;
+            animation: bounce 0.5s infinite alternate;
+        }
+        @keyframes bounce {
+            0% { transform: translateY(0); }
+            100% { transform: translateY(-10px); }
+        }
+        .close-popup-btn {
+            background-color: #ffffff;
+            color: #071126;
+            border: none;
+            padding: 10px 25px;
+            font-size: 14px;
+            font-weight: bold;
+            border-radius: 20px;
+            cursor: pointer;
+        }
+
+        /* 結果・引き換え画面 */
+        .result-screen {
+            display: none;
+            width: 100%;
+            max-width: 420px;
+            margin: 20px auto;
+            padding: 20px;
+            background: linear-gradient(135deg, #ff4757 0%, #ff6b81 100%);
+            border-radius: 15px;
+            box-shadow: 0 10px 20px rgba(255,71,87,0.4);
+            box-sizing: border-box;
+            color: #fff;
+        }
+        .result-title {
+            font-size: 22px;
+            font-weight: bold;
+            margin: 0 0 10px 0;
+        }
+        .prize-info {
+            background-color: rgba(0, 0, 0, 0.2);
+            padding: 15px;
+            border-radius: 10px;
+            text-align: left;
+            font-size: 13px;
+            line-height: 1.6;
+        }
+        .prize-info h3 {
+            margin: 0 0 8px 0;
+            color: var(--accent-color);
+            border-bottom: 1px dashed rgba(255,255,255,0.4);
+            padding-bottom: 4px;
+            font-size: 15px;
+        }
+        .staff-button {
+            margin-top: 15px;
+            background-color: #ffffff;
+            color: var(--primary-color);
+            border: none;
+            padding: 12px 20px;
+            font-size: 14px;
+            font-weight: bold;
+            border-radius: 25px;
+            cursor: pointer;
+            width: 100%;
+        }
+        .staff-button.used {
+            background-color: #888;
+            color: #ccc;
+            cursor: not-allowed;
+        }
+    </style>
+</head>
+<body>
+
+    <div class="instruction">
+        マスをタップして「うちわ」スタンプをあつめよう！<br>1れつそろったら、画面をスタッフにみせてね！
+    </div>
+
+    <div class="bingo-container">
+        <img src="haikei.png" alt="背景" class="bg-image">
+        
+        <div class="bingo-board" id="board"></div>
+    </div>
+
+    <div class="clear-popup" id="clearPopup">
+        <div class="clear-message">🎆 ビンゴ！ 🎆<br>おめでとうございます！</div>
+        <button class="close-popup-btn" onclick="closePopup()">けいひん引きかえ画面へ</button>
+    </div>
+
+    <div class="result-screen" id="resultScreen">
+        <div class="result-title">🎆 ビンゴ！おめでとう 🎆</div>
+        <div class="prize-info">
+            <h3>🎁 けいひん引きかえ情報</h3>
+            <p><strong>場所（ばしょ）：</strong>盆踊り受付（常盤南小学校）</p>
+            <p><strong>時間（じかん）：</strong>18時半 〜 20時まで</p>
+            <p><strong>けいひん：</strong>屋台（やたい）チケット<br><small>※先着（せんちゃく）200名さまだよ！</small></p>
+        </div>
+        <button class="staff-button" id="staffBtn" onclick="claimPrize()">スタッフ確認ボタン（おさないでね）</button>
+    </div>
+
+    <script>
+        // 内部のビンゴ判定用データ（5番目が「とうもの会のゲームに参加した」）
+        const items = [
+            "舞台上に上がってたのしんだ", "絶対に来年も来る！！", "加藤ふみあきさんをみつけた！",
+            "オタゲーを観た！", "とうもの会のゲームに参加した", "屋台でお買物をした",
+            "盆踊りを1曲以上おどった", "消防団の人に挨拶した", "学校の先生に会った"
+        ];
+
+        const board = document.getElementById('board');
+        const resultScreen = document.getElementById('resultScreen');
+        const clearPopup = document.getElementById('clearPopup');
+        const cells = [];
+        let isBingo = false;
+
+        // 9つの透明ボタンの中に、それぞれうちわ動画を仕込む
+        for (let i = 0; i < 9; i++) {
+            const cell = document.createElement('div');
+            cell.classList.add('cell');
+            
+            // 🎬 枠内再生用のうちわ動画要素を作成
+            const video = document.createElement('video');
+            video.classList.add('stamp-video');
+            video.src = 'uchiwa.mp4';
+            video.loop = true;
+            video.muted = true; // スマホでの自動再生ブロックを絶対に防ぐミュート設定
+            video.setAttribute('playsinline', ''); // iOS（Safari）で全画面にならず枠内で再生させる設定
+            cell.appendChild(video);
+
+            cell.addEventListener('click', () => {
+                if(document.getElementById('staffBtn').classList.contains('used')) return;
+                
+                cell.classList.toggle('selected');
+                
+                // タップされたら動画を再生、外されたら停止
+                if(cell.classList.contains('selected')) {
+                    video.play().catch(e => console.log("動画再生エラーを回避:", e));
+                } else {
+                    video.pause();
+                    video.currentTime = 0;
+                }
+                
+                checkBingo();
+            });
+
+            board.appendChild(cell);
+            cells.push(cell);
+        }
+
+        function checkBingo() {
+            if (isBingo) return;
+
+            const lines = [
+                [0, 1, 2], [3, 4, 5], [6, 7, 8], // 横
+                [0, 3, 6], [1, 4, 7], [2, 5, 8], // 縦
+                [0, 4, 8], [2, 4, 6]             // 斜め
+            ];
+
+            for (let line of lines) {
+                if (cells[line[0]].classList.contains('selected') &&
+                    cells[line[1]].classList.contains('selected') &&
+                    cells[line[2]].classList.contains('selected')) {
+                    
+                    showBingoSuccess();
+                    break;
+                }
+            }
+        }
+
+        function showBingoSuccess() {
+            isBingo = true;
+            // 携帯でのフリーズを防ぐため、演出は確実に動くシステムポップアップを使用
+            setTimeout(() => {
+                clearPopup.style.display = 'flex';
+            }, 500); // 動画が少し見えてからポップアップが出るように一瞬ディレイ
+        }
+
+        function closePopup() {
+            clearPopup.style.display = 'none';
+            resultScreen.style.display = 'block';
+            resultScreen.scrollIntoView({ behavior: 'smooth' });
+        }
+
+        function claimPrize() {
+            if (confirm('【スタッフ専用】本当に景品と引き換えますか？')) {
+                const btn = document.getElementById('staffBtn');
+                btn.innerText = '引き換え済み（ひきかえずみ）';
+                btn.classList.add('used');
+                btn.disabled = true;
+            }
+        }
+    </script>
+</body>
+</html>
